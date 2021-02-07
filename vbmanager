@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# Temporal list of commands I will need
+# local running=$(VBoxManage list runningvms | ${sedcmd} -r 's/^"(.*)".*$/\1/')
+# VBoxManage controlvm $n reset
+# VBoxManage startvm $n --type headless
+# VBoxManage controlvm $n poweroff
+# VBoxManage list vms
+
+die() {
+  printf '%s\n' "$1" >&2
+  exit 1
+}
+
+die 'ERROR: "--file" requires a non-empty option argument.'
+
+VBoxManage list vms
