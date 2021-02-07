@@ -3,8 +3,6 @@
 # Temporal list of commands I will need
 # local running=$(VBoxManage list runningvms | ${sedcmd} -r 's/^"(.*)".*$/\1/')
 # VBoxManage controlvm $n reset
-# VBoxManage startvm $n --type headless
-# VBoxManage controlvm $n poweroff
 # VBoxManage list vms
 
 die() {
@@ -30,7 +28,7 @@ while :; do
       ;;
 
     -l|--list)
-      VBoxManage list vms
+      VBoxManage list vms | sed -r 's/^"(.*)".*$/\1/'
       exit
       ;;
 
