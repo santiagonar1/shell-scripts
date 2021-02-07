@@ -21,7 +21,6 @@ show_help() {
 # This ensures we are not contaminated by variables from the environment.
 kill_vm=
 kill_all=
-start_vm=
 
 while :; do
   case $1 in
@@ -34,6 +33,25 @@ while :; do
       VBoxManage list vms
       exit
       ;;
+
+    -s|--start)
+      if [ "$2" ]; then
+        VBoxManage startvm "$2" --type headless
+      else
+        die 'ERROR: "--start" requires a non-empy option argument'
+      fi
+      exit
+      ;;
+
+    -k|--kill)
+      if [ "$2" ]; then
+        VBoxManage controlvm "$2" poweroff
+      else
+        die 'ERROR: "--kill" requires a non-empy option argument'
+      fi
+      exit
+      ;;
+
 
     -?*)
       printf 'WARN: Unknown option (ignored): %s\n' "$1" >&2
