@@ -12,6 +12,37 @@ die() {
   exit 1
 }
 
-die 'ERROR: "--file" requires a non-empty option argument.'
+show_help() {
+	echo "here comes the help"
+}
 
-VBoxManage list vms
+
+# Initialize all the option variables.
+# This ensures we are not contaminated by variables from the environment.
+kill_vm=
+kill_all=
+start_vm=
+
+while :; do
+  case $1 in
+    -h|-\?|--help)
+      show_help    # Display a usage synopsis.
+      exit
+      ;;
+
+    -l|--list)
+      VBoxManage list vms
+      exit
+      ;;
+
+    -?*)
+      printf 'WARN: Unknown option (ignored): %s\n' "$1" >&2
+      ;;
+
+    *)               # Default case: No more options, so break out of the loop.
+      break
+  esac
+
+  shift
+done
+
