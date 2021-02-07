@@ -15,11 +15,6 @@ show_help() {
 }
 
 
-# Initialize all the option variables.
-# This ensures we are not contaminated by variables from the environment.
-kill_vm=
-kill_all=
-
 while :; do
   case $1 in
     -h|-\?|--help)
@@ -29,6 +24,11 @@ while :; do
 
     -l|--list)
       VBoxManage list vms | sed -r 's/^"(.*)".*$/\1/'
+      exit
+      ;;
+
+    -r|--running)
+      VBoxManage list runningvms | sed -r 's/^"(.*)".*$/\1/'
       exit
       ;;
 
