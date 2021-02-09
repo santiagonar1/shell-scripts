@@ -1,0 +1,254 @@
+#!/bin/zsh
+
+
+###############
+#  VM cluster
+###############
+function avail_vmc {
+	echo -e "\nVM Cluster\t\t >>>  vmstart  vmclose  vmcnew  vmcroot  vmcirm"
+}
+
+export VMNODES=$(
+	# Home computer
+	if [[ $(hostname) == "atsccs79" ]]; then
+		echo 8
+	else
+		echo 0
+	fi
+)
+
+function vmstart {
+	if [[ $# != 1 ]]; then
+		echo -e "\n\tUsage: vmstart <all|node_name>"
+	else
+		sedcmd=sed
+		if [[ $(uname) == "Darwin" ]]; then
+			sedcmd=gsed
+		fi
+		# Reboot or Start:
+		# 1. get list of running vms
+		local running=$(VBoxManage list runningvms | ${sedcmd} -r 's/^"(.*)".*$/\1/')
+		# 2. get list of vm nodes
+		declare -a nodes
+		if [[ $1 == 'all' ]]; then
+			if [[ $VMNODES == 2 ]]; then
+				nodes=("login" "node0" "node1" "controller")
+			elif [[ $VMNODES == 4 ]]; then
+				nodes=("login" "node0" "node1" "node2" "node3" "controller")
+			elif [[ $VMNODES == 8 ]]; then
+				nodes=("login" "node0" "node1" "node2" "node3" "node4" "node5" "node6" "node7" "controller")
+			else
+				nodes=()
+			fi
+		else
+			nodes=($1)
+		fi
+		# 3. for every node, if running then reboot, if not then start
+		for n in "${nodes[@]}"; do
+			if [[ $running =~ (^|[[:space:]])$n($|[[:space:]]) ]]; then
+				echo -e "VM \"$n\" is already running. Rebooting..."
+				VBoxManage controlvm $n reset
+			else
+				VBoxManage startvm $n --type headless
+			fi
+		done
+	fi
+}
+
+function vmclose {
+	if [[ $# != 1 ]]; then
+		echo -e "\n\tUsage: vmclose <all|node_name>"
+	else
+		# 1. get list of vm nodes
+		declare -a nodes
+		if [[ $1 == 'all' ]]; then
+			if [[ $VMNODES == 2 ]]; then
+				nodes=("login" "node0" "node1" "controller")
+			elif [[ $VMNODES == 4 ]]; then
+				nodes=("login" "node0" "node1" "node2" "node3" "controller")
+			elif [[ $VMNODES == 8 ]]; then
+				nodes=("login" "node0" "node1" "node2" "node3" "node4" "node5" "node6" "node7" "controller")
+			else
+				nodes=()
+			fi
+		else
+			nodes=($1)
+		fi
+		# 2. poweroff every node
+		for n in "${nodes[@]}"; do
+			VBoxManage controlvm $n poweroff
+		done
+	fi
+}
+
+function vmcnew {
+	# kill old session if it already exists
+	tmux kill-session -t vmc
+	# Create new session vmc
+	tmux new-session -d -s vmc
+	# window 1: irm grid
+	tmux rename-window "irm"
+	# window 2
+	tmux new-window -n "login.cmp"
+	# window 3
+	tmux new-window -n "login.srun"
+	# window 4
+	tmux new-window -n "out"
+	tmux a -t vmc
+}
+
+function vmcroot {
+	# kill old session if it already exists
+	tmux kill-session -t vmcroot
+	# Create new session vmc
+	tmux new-session -d -s vmcroot
+	# window 1: irm grid
+	tmux rename-window "root"
+	# get current window number
+	tmux select-window -t "root"
+	# start node grid, login each node as root
+	vm_root_login
+	# attach to session
+	tmux a -t vmcroot
+}
+
+function vmcirm {
+	# kill old session if it already exists
+	tmux kill-session -t vmcirm
+	# Create new session vmc
+	tmux new-session -d -s vmcirm
+	# window 1: irm grid
+	tmux rename-window "irm"
+	# get current window number
+	tmux select-window -t "irm"
+	# start node grid, login each node as root
+	vm_root_login
+	sleep 2
+	# start node and controller
+	if [[ $VMNODES == 2 ]]; then
+		vm_irm_node 1
+		vm_irm_node 2
+		vm_irm_ctrl 3
+	elif [[ $VMNODES == 4 ]]; then
+		vm_irm_node 1
+		vm_irm_node 2
+		vm_irm_node 4
+		vm_irm_node 5
+		vm_irm_ctrl 3
+	elif [[ $VMNODES == 8 ]]; then
+		vm_irm_node 1
+		vm_irm_node 2
+		vm_irm_node 3
+		vm_irm_node 4
+		vm_irm_node 6
+		vm_irm_node 7
+		vm_irm_node 8
+		vm_irm_node 9
+		vm_irm_ctrl 5
+	fi
+	# window 2: login node
+	# tmux new-window -n "login"
+	# tmux send-keys -t "login" 'ssh santiago@login' Enter
+	tmux a -t vmcirm
+}
+
+function vmstatus {
+	if [[ $# != 1 ]]; then
+		echo -e "\n\tUsage: vmclose <all|node_name>"
+	else
+		# 1. get list of vm nodes
+		declare -a nodes
+		if [[ $1 == 'all' ]]; then
+			if [[ $VMNODES == 2 ]]; then
+				nodes=("login" "node0" "node1" "controller")
+			elif [[ $VMNODES == 4 ]]; then
+				nodes=("login" "node0" "node1" "node2" "node3" "controller")
+			elif [[ $VMNODES == 8 ]]; then
+				nodes=("login" "node0" "node1" "node2" "node3" "node4" "node5" "node6" "node7" "controller")
+			else
+				nodes=()
+			fi
+		else
+			nodes=($1)
+		fi
+		# 2. Get VMs status
+		for n in "${nodes[@]}"; do
+			if [[ $(VBoxManage showvminfo $n | grep -c "running (since") == 1 ]]; then
+				echo "$n UP"
+			else
+				echo "$n DOWN"
+			fi
+		done
+	fi
+}
+
+
+#-------------------------
+# VM internal functions
+#-------------------------
+
+function vm_tmux_grid {
+	if [[ $VMNODES == 2 ]]; then
+		tmux splitw -h -p 66
+		tmux splitw -h -t 2 -p 50
+	elif [[ $VMNODES == 4 ]]; then
+		tmux splitw -h -p 66
+		tmux splitw -h -t 2 -p 50
+		tmux splitw -v -t 1 -p 50
+		tmux splitw -v -t 2 -p 50
+	elif [[ $VMNODES == 8 ]]; then
+		tmux splitw -h -p 80
+		tmux splitw -h -t 2 -p 75
+		tmux splitw -h -t 3 -p 66
+		tmux splitw -h -t 4 -p 50
+		tmux splitw -v -t 1 -p 50
+		tmux splitw -v -t 2 -p 50
+		tmux splitw -v -t 3 -p 50
+		tmux splitw -v -t 4 -p 50
+	fi
+}
+
+function vm_root_login {
+	# setup tmux grid
+	vm_tmux_grid
+	# login each vm as root
+	if [[ $VMNODES == 2 ]]; then
+		tmux send-keys -t 1 'ssh root@node0' Enter
+		tmux send-keys -t 2 'ssh root@node1' Enter
+		tmux send-keys -t 3 'ssh root@controller' Enter
+	elif [[ $VMNODES == 4 ]]; then
+		tmux send-keys -t 1 'ssh root@node0' Enter
+		tmux send-keys -t 2 'ssh root@node1' Enter
+		tmux send-keys -t 4 'ssh root@node2' Enter
+		tmux send-keys -t 5 'ssh root@node3' Enter
+		tmux send-keys -t 3 'ssh root@controller' Enter
+	elif [[ $VMNODES == 8 ]]; then
+		tmux send-keys -t 1 'ssh root@node0' Enter
+		tmux send-keys -t 2 'ssh root@node1' Enter
+		tmux send-keys -t 3 'ssh root@node2' Enter
+		tmux send-keys -t 4 'ssh root@node3' Enter
+		tmux send-keys -t 6 'ssh root@node4' Enter
+		tmux send-keys -t 6 'ssh root@node5' Enter
+		tmux send-keys -t 8 'ssh root@node6' Enter
+		tmux send-keys -t 9 'ssh root@node7' Enter
+		tmux send-keys -t 5 'ssh root@controller' Enter
+	fi
+}
+
+function vm_irm_node {
+	tmux send-keys -t $1 'pkill -f munge -9' Enter
+	tmux send-keys -t $1 'munged -f' Enter
+	tmux send-keys -t $1 'pkill -f slurm -9' Enter
+	tmux send-keys -t $1 'slurmd -Dc' Enter
+}
+
+function vm_irm_ctrl {
+	tmux send-keys -t $1 'pkill -f munge -9' Enter
+	tmux send-keys -t $1 'munged -f' Enter
+	tmux send-keys -t $1 'pkill -f slurm -9' Enter
+	# tmux send-keys -t $1 'pkill -f slurmctld -9' Enter
+	# tmux send-keys -t $1 'slurmctld -Dc' Enter
+	tmux send-keys -t $1 'pkill -f irtsched -9' Enter
+	tmux send-keys -t $1 'irtsched -Dc' Enter
+}
+
